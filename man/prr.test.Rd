@@ -75,6 +75,7 @@ Then the use of family quasibinomial and quasipoisson might be more appropriate.
 \item{p.value.obs}{observed p-value of the Likelihood Ratio test statistcs 'LRstat' calculated via a Chi-square distribution with one degree of freedom.}
 \item{p.value.perm}{permutation p-value, fraction of permutation based p-values
  less than or equal to the observed p-value.}
+\item{p.value.perm.se}{estimated standard errors associated with permutation p-values}
 \item{nobs}{number of observations used}
 \item{var}{the independent variable which is tested for association with the response variable.}
 }

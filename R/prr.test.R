@@ -94,6 +94,12 @@ function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, weights, 
     names(ret.val$p01) <- "permutation p-value for simulated p-values <= 1.01 observed p-value"
     names(ret.val$p02) <- "permutation p-value for simulated p-values <= 1.02 observed p-value"
     names(ret.val$p04) <- "permutation p-value for simulated p-values <= 1.04 observed p-value"
+    ### new standard error output
+    ret.stderr <- list(se.p0 = sqrt(p.value.obs*(1-p.value.obs)/nrep),
+        se.p005 = sqrt(1.005*p.value.obs*(1-1.005*p.value.obs)/nrep),
+        se.p01 = sqrt(1.01*p.value.obs*(1-1.01*p.value.obs)/nrep),
+        se.p02 = sqrt(1.02*p.value.obs*(1-1.02*p.value.obs)/nrep),
+        se.p04 = sqrt(1.04*p.value.obs*(1-1.04*p.value.obs)/nrep))
     ### new output
     if (model)
         fit1$model <- mf
@@ -105,7 +111,7 @@ function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, weights, 
     out <- c(list(fit1 = c(fit1,list(terms = mt, offset = offset, control = control, method = method, 
         contrasts = attr(X, "contrasts"), xlevels = .getXlevels(mt,mf))), fit2 = fit2, call = call, formula = formula, 
         seed=seed, fit1deviance=fit1$deviance, fit2deviance=fit2$deviance, Dispersion=dispersion, estimated.Dispersion = estimated.dispersion,
-        LRstat= abs(fit1$deviance - fit2$deviance)/dispersion,  p.value.obs=p.value.obs, p.value.perm = ret.val, nobs= ret.val$nobs, var=var))
+        LRstat= abs(fit1$deviance - fit2$deviance)/dispersion,  p.value.obs=p.value.obs, p.value.perm = ret.val, p.value.perm.se= ret.stderr, nobs= ret.val$nobs, var=var))
    class(out) <- "prr.test"
     return(out)
   }

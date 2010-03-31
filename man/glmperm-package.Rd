@@ -15,8 +15,8 @@ small sample size.
 \tabular{ll}{
 Package: \tab glmperm\cr
 Type: \tab Package\cr
-Version: \tab 1.0\cr
-Date: \tab 2009-09-07\cr
+Version: \tab 1.0-2\cr
+Date: \tab 2009-31-03\cr
 License: \tab GPL-3\cr
 }
 The function prr.test requires that the user identifies one independent 
