@@ -1,7 +1,7 @@
 glm.perm <-
 function(y, x, Family)
 {   
-    sel <- sample(1:nrow(x), rep = FALSE)
+    sel <- sample(1:nrow(x), replace = FALSE)
     x.resample <- cbind(x[, -which(colnames(x)=="resid"), drop = FALSE], x[, "resid", drop = FALSE][sel])
     f1 <- glm.fit(x.resample, y, family=Family)
     df.r <- f1$df.residual

@@ -1,0 +1,9 @@
+b702d45684e3d35a89b2c06b94127458 *DESCRIPTION
+730bcd6a0c4169b06b3dba18dde9d294 *NAMESPACE
+fc31543e376322ad26e257f8cea08c66 *R/glm.perm.R
+651deb5e6e4434c43e496b240b14d773 *R/prr.test.R
+e8015b1d6e0a0cb25adcf47f40389c15 *R/summary.prr.test.R
+b18a6c855dbed7eb4034ada667de56f6 *man/glm.perm.Rd
+9aed63a06bbf58e68c63e9b3a4eef2be *man/glmperm-package.Rd
+7e205f56c28ec1c39bb046d81f8a19c6 *man/prr.test.Rd
+f100f6ac36028dae52665b317f617463 *man/summary.prr.test.Rd

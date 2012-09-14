@@ -44,8 +44,4 @@ y<-ifelse(y>0,1,0)
 LRtest1 <- prr.test(y~x0+x1+x2,var="x0", family=binomial())
 summary(LRtest1)
 
-### Example 2 ###
-utils::data(anorexia, package="MASS")
-LRtest <- prr.test(Postwt ~ Prewt + Treat, var="Prewt", data = anorexia, family = gaussian())
-summary(LRtest)
 }
