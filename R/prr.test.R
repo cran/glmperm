@@ -1,5 +1,5 @@
 prr.test <-
-function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, weights,  subset, na.action,
+function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, Silent=TRUE, weights,  subset, na.action,
     start = NULL, etastart, mustart, offset, control = glm.control(...), model = TRUE, method = "glm.fit", x = FALSE, y = TRUE, contrasts = NULL, ...)
 {
     call <- match.call()
@@ -11,8 +11,12 @@ function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, weights, 
         print(family)
         stop("'family' not recognized")
     }
-    if (missing(data))
+    Cox <- (family$family == "Cox")
+    if (Cox) 
+        require(survival)
+    if (missing(data)) {
         data <- environment(formula)
+    }
     mf <- match.call(expand.dots = FALSE)
     m <- match(c("formula", "data",  "subset", "weights", "na.action",
         "etastart", "mustart", "offset"), names(mf), 0L)
@@ -30,6 +34,15 @@ function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, weights, 
         if (!is.null(nm))
             names(Y) <- nm
     }
+    # Interaction term, may require reordering
+    if(length(grep(":", var))) {
+	vars <- unlist(strsplit(var, split=":"))
+ 	o <- order(match(vars, as.character(attr(mt,"variables"))))
+	var <- paste(vars[o[1]],vars[o[2]],sep=":")
+    }
+    #
+    if(Cox) 
+	if(!is.Surv(Y)){stop("for family 'Cox' the response variable has to be a survival object")}
     X <- if (!is.empty.model(mt))
         model.matrix(mt, mf, contrasts)
     else matrix(, NROW(Y), 0L)
@@ -47,10 +60,16 @@ function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, weights, 
     mustart <- model.extract(mf, "mustart")
     etastart <- model.extract(mf, "etastart")
     if(!(paste(var) %in% colnames(X))) stop("var not a covariate in the formular")
-    X <- cbind(X, rep(NA,nrow(X)))
+    X <- cbind(X, rep(NA, nrow(X)))
     colnames(X)[ncol(X)] <- "resid"            
     X[,"resid"] <- lm.fit(x = X[, -which(colnames(X) %in% c(paste(var),"resid")), drop = FALSE], y=X[, paste(var), drop = FALSE])$residuals
-    ###
+    ### Original data
+    if(Cox){
+      fit1 <- try(coxph.fit(x=X[, -which(colnames(X)==paste(var)), drop = FALSE], y=Y, strata=NULL, control=coxph.control(), method="efron", rownames=NULL) )
+      fit2 <- try(coxph.fit(x=X[, -which(colnames(X) %in% c(paste(var),"resid")), drop = FALSE], y=Y, strata=NULL, control=coxph.control(), method="efron", rownames=NULL) )
+      if(class(fit1)[1]=="try-error" | class(fit2)[1]=="try-error") return("error in fitting the Cox model for either the full or the reduced model")
+      p.value.obs <- 1 - pchisq(abs(-2*fit1$loglik[2] + 2* fit2$loglik[2]), 1)
+    } else {
     fit1 <- glm.fit(x = X[, -which(colnames(X)==paste(var)), drop = FALSE], y = Y, weights = weights, start = start,
         etastart = etastart, mustart = mustart, offset = offset, family = family, control = control, intercept = attr(mt,
             "intercept") > 0)
@@ -73,34 +92,52 @@ function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, weights, 
     if(fit1$family$family %in% c("poisson", "binomial")){dispersion <- 1}
     ###
     p.value.obs <- 1 - pchisq(abs(fit1$deviance - fit2$deviance)/dispersion, 1)
-    ### permutation part
+    }
+    ### Permutations
     set.seed(seed)
-    devi.disp <- matrix(0, ncol=2, nrow=nrep)
-    options(warn = -1)
-    oldtime <- proc.time()[1]
-    for (i in 1:nrep){devi.disp[i,] <- glm.perm(Y, X[, -which(colnames(X)==paste(var)), drop = FALSE], Family=family)}
-    print(c("execution time in minutes", round((proc.time()[1] - oldtime)/60, 2)))
-    options(warn = 0)
-    psim <- 1 - pchisq(abs(devi.disp[,1] - fit2$deviance)/devi.disp[,2], 1)
-    ### output of prr.test by Potter 
-    ret.val <- list(nobs = nrow(X), p0 = length(psim[psim <= p.value.obs])/nrep,
-        p005 = length(psim[psim <= 1.005 * p.value.obs])/nrep,
-        p01 = length(psim[psim <= 1.01 * p.value.obs])/nrep,
-        p02 = length(psim[psim <= 1.02 * p.value.obs])/nrep,
-        p04 = length(psim[psim <= 1.04 * p.value.obs])/nrep)
+    #
+    if(Cox){
+      devi  <- rep(NA, times=nrep)
+      options(warn = -1)
+      oldtime <- proc.time()[1]
+      for (i in 1:nrep){devi[i] <- try(glm.perm(Y, X[, -which(colnames(X)==paste(var)), drop = FALSE], Family=family))}
+      if(!Silent){print(c("execution time in minutes", round((proc.time()[1] - oldtime)/60, 2)))}
+      options(warn = 0)
+      psim <- 1 - pchisq(abs(devi + 2* fit2$loglik[2]), 1)
+    } else {  
+      devi.disp <- matrix(0, ncol=2, nrow=nrep)
+      options(warn = -1)
+      oldtime <- proc.time()[1]
+      for (i in 1:nrep){devi.disp[i,] <- glm.perm(Y, X[, -which(colnames(X)==paste(var)), drop = FALSE], Family=family)}
+      if(!Silent){print(c("execution time in minutes", round((proc.time()[1] - oldtime)/60, 2)))}
+      options(warn = 0)
+      psim <- 1 - pchisq(abs(devi.disp[,1] - fit2$deviance)/devi.disp[,2], 1)
+    }
+### output of prr.test by Potter 
+    nrep.true <- sum(!is.na(psim))
+    ret.val <- list(nobs = nrow(X), p0 = length(psim[psim <= p.value.obs])/nrep.true,
+        p005 = length(psim[psim <= 1.005 * p.value.obs])/nrep.true,
+        p01 = length(psim[psim <= 1.01 * p.value.obs])/nrep.true,
+        p02 = length(psim[psim <= 1.02 * p.value.obs])/nrep.true,
+        p04 = length(psim[psim <= 1.04 * p.value.obs])/nrep.true)
     names(ret.val$nobs) <- "number of observations used"
     names(ret.val$p0) <- "permutation p-value for simulated p-values <= observed p-value"
     names(ret.val$p005) <- "permutation p-value for simulated p-values <= 1.005 observed p-value"
     names(ret.val$p01) <- "permutation p-value for simulated p-values <= 1.01 observed p-value"
     names(ret.val$p02) <- "permutation p-value for simulated p-values <= 1.02 observed p-value"
     names(ret.val$p04) <- "permutation p-value for simulated p-values <= 1.04 observed p-value"
-    ### new standard error output
-    ret.stderr <- list(se.p0 = sqrt(p.value.obs*(1-p.value.obs)/nrep),
-        se.p005 = sqrt(1.005*p.value.obs*(1-1.005*p.value.obs)/nrep),
-        se.p01 = sqrt(1.01*p.value.obs*(1-1.01*p.value.obs)/nrep),
-        se.p02 = sqrt(1.02*p.value.obs*(1-1.02*p.value.obs)/nrep),
-        se.p04 = sqrt(1.04*p.value.obs*(1-1.04*p.value.obs)/nrep))
-    ### new output
+### new standard error output
+    ret.stderr <- list(se.p0 = sqrt(ret.val$p0*(1-ret.val$p0)/nrep.true),
+        se.p005 = sqrt(ret.val$p005*(1-ret.val$p005)/nrep.true),
+        se.p01 = sqrt(ret.val$p01*(1-ret.val$p01)/nrep.true),
+        se.p02 = sqrt(ret.val$p02*(1-ret.val$p02)/nrep.true),
+        se.p04 = sqrt(ret.val$p04*(1-ret.val$p04)/nrep.true))
+    names(ret.stderr$se.p0) <- NULL
+    names(ret.stderr$se.p005) <- NULL
+    names(ret.stderr$se.p01) <- NULL
+    names(ret.stderr$se.p02) <- NULL
+    names(ret.stderr$se.p04) <- NULL
+### new output
     if (model)
         fit1$model <- mf
     fit1$na.action <- attr(mf, "na.action")
@@ -108,11 +145,18 @@ function(formula, var, family=gaussian, data, nrep = 1000, seed=12345, weights, 
         fit1$x <- X
     if (!y)
         fit1$y <- NULL
-    out <- c(list(fit1 = c(fit1,list(terms = mt, offset = offset, control = control, method = method, 
-        contrasts = attr(X, "contrasts"), xlevels = .getXlevels(mt,mf))), fit2 = fit2, call = call, formula = formula, 
-        seed=seed, fit1deviance=fit1$deviance, fit2deviance=fit2$deviance, Dispersion=dispersion, estimated.Dispersion = estimated.dispersion,
-        LRstat= abs(fit1$deviance - fit2$deviance)/dispersion,  p.value.obs=p.value.obs, p.value.perm = ret.val, p.value.perm.se= ret.stderr, nobs= ret.val$nobs, var=var))
-   class(out) <- "prr.test"
+###
+    if(Cox){
+     out <- c(list(fit1 = c(fit1,list(terms = mt, offset = offset, control = control, method = method, 
+                                     contrasts = attr(X, "contrasts"), xlevels = .getXlevels(mt,mf))), fit2 = fit2, call = call, formula = formula, 
+                  seed=seed, fit1deviance=-2* fit2$loglik[2], fit2deviance=-2* fit2$loglik[2], LRstat= abs(-2* fit1$loglik[2] + 2* fit2$loglik[2]),  p.value.obs=p.value.obs, p.value.perm = ret.val, p.value.perm.se= ret.stderr, nobs= ret.val$nobs, var=var, nrep.true=nrep.true))
+    } else {
+      out <- c(list(fit1 = c(fit1,list(terms = mt, offset = offset, control = control, method = method, 
+          contrasts = attr(X, "contrasts"), xlevels = .getXlevels(mt,mf))), fit2 = fit2, call = call, formula = formula, 
+          seed=seed, fit1deviance=fit1$deviance, fit2deviance=fit2$deviance, Dispersion=dispersion, estimated.Dispersion = estimated.dispersion,
+          LRstat= abs(fit1$deviance - fit2$deviance)/dispersion,  p.value.obs=p.value.obs, p.value.perm = ret.val, p.value.perm.se= ret.stderr, nobs= ret.val$nobs, var=var, nrep.true=nrep.true))
+    }
+    class(out) <- "prr.test"
     return(out)
   }
 
